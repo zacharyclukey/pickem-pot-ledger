@@ -17,7 +17,7 @@ who prepays is entered automatically every week until their credit runs out.
 ## Putting it on GitHub Pages
 
 1. Create a repository (any name — `pickem` works).
-2. Upload every file in this folder to the root of the repo:
+2. Put every file in this folder at the root of the repo:
    `index.html`, `manifest.webmanifest`, `sw.js`, `icon.svg`, `icon-180.png`,
    `icon-192.png`, `icon-512.png`, `icon-maskable-512.png`.
    On github.com: **Add file → Upload files**, drag them all in, **Commit**.
@@ -27,10 +27,15 @@ who prepays is entered automatically every week until their credit runs out.
 
 A public repo gets Pages for free. A private repo needs GitHub Pro.
 
-## Using it on a phone
+## Using it on a phone — install it, don't just bookmark it
 
 Open the URL, then **Share → Add to Home Screen** (iOS) or **⋮ → Install app**
-(Android). It opens full screen like an app and works without a signal.
+(Android). It opens full screen and works without a signal.
+
+This is not just polish. The ledger lives in the browser's storage, and iOS
+clears that storage for ordinary Safari tabs after about a week of not visiting
+the site. Installed to the Home Screen, it is exempt. A bookmarked tab left
+alone over a bye week can come back empty.
 
 ## First-time setup
 
@@ -53,7 +58,32 @@ Open the URL, then **Share → Add to Home Screen** (iOS) or **⋮ → Install a
 
 The ledger lives in one browser's storage. Clearing site data wipes it.
 **Money tab → Export backup** saves a JSON file; **Restore backup** reads one
-back. Worth doing every few weeks — email it to yourself.
+back. Email it to yourself.
+
+The app nags about this on its own: it shows a banner when no backup has ever
+been taken and again once one is two weeks old, and it automatically exports a
+backup before the two actions that can erase a season — **Start a new season**
+and **Restore backup**.
+
+If the browser ever refuses to save, a red banner says so. Everything after that
+point is on screen only. Export a backup before closing the tab.
+
+## Guardrails on the ledger
+
+Three things used to change the books quietly. They now announce themselves:
+
+- **The weekly buy-in is stamped onto a week when that week locks.** Changing the
+  buy-in later re-prices only the week still open, never settled weeks. A locked
+  week's pot and what each player was charged for it can no longer move.
+- **Re-locking a week that was unlocked names anyone it would let back in.** Someone
+  who paid after kickoff got a missed mark; re-locking would silently readmit
+  them and grow the pot. The button and a note now say who and by how much.
+- **Jumping *Current week* forward more than one week asks twice.** Moving from week
+  1 to week 5 bills every player four weeks of dues out of their credit. The
+  first Save shows the damage; the second commits it.
+
+Removing a player also deletes their payment history, so the confirm button says
+how many payments go with them.
 
 ## Editing the app
 

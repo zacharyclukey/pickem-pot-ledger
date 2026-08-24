@@ -144,6 +144,9 @@ textarea{min-height:130px;resize:vertical;font-size:14px}
 .sheet-hd h2{font-size:16px;font-weight:800}
 .hist{font-size:13px;border-top:1px solid var(--rule2);padding:8px 0;display:flex;justify-content:space-between;gap:8px;align-items:center}
 .banner{background:var(--pend-soft);color:var(--pend);border:1px solid var(--rule);border-radius:10px;padding:9px 12px;font-size:12.5px;margin-top:12px}
+.banner.bad{background:var(--due-soft);color:var(--due)}
+.banner strong{display:block;font-weight:700;margin-bottom:2px}
+.banner button{float:right;margin-left:10px;background:none;border:0;color:inherit;font:inherit;text-decoration:underline;cursor:pointer;padding:0}
 </style>
 <meta name="theme-color" content="#EAEDE8" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0E1512" media="(prefers-color-scheme: dark)">
@@ -209,7 +212,9 @@ textarea{min-height:130px;resize:vertical;font-size:14px}
         var d2=state.weekData[String(w2)]||{};
         if(satOut(w2,p.id)){status[w2]="sat";sat.push(w2);continue;}
         if(d2.locked){
-          if(d2.playing&&d2.playing.indexOf(p.id)>-1){rem-=price;status[w2]="played";played.push(w2);}
+          /* A locked week is history: bill it at the price it locked at, not
+             at whatever the buy-in happens to be today. */
+          if(d2.playing&&d2.playing.indexOf(p.id)>-1){rem-=(d2.price!=null?d2.price:price);status[w2]="played";played.push(w2);}
           else{status[w2]="missed";missed.push(w2);}
         }else{
           if(rem>=price){rem-=price;status[w2]="in";played.push(w2);}
@@ -247,8 +252,22 @@ textarea{min-height:130px;resize:vertical;font-size:14px}
       if(satOut(w,p.id))return;
       if(by[p.id].status[w]==="in")playing.push(p.id); else missed.push(p.id);
     });
-    d.playing=playing; d.missed=missed; d.pot=playing.length*state.weekPrice; d.locked=true;
+    d.price=state.weekPrice;
+    d.playing=playing; d.missed=missed; d.pot=playing.length*d.price; d.locked=true;
+    d.everLocked=true;
     invalidate();
+  }
+  /* Who would join this week if it were locked again now, after having been
+     unlocked? They missed the deadline once, so re-locking quietly readmits
+     them — name them on the button instead. */
+  function readmitted(w){
+    var d=state.weekData[String(w)]; if(!d||!d.everLocked||d.locked||!d.prevMissed)return [];
+    var by=ledger(),out=[];
+    d.prevMissed.forEach(function(id){
+      if(satOut(w,id))return;
+      if(by[id]&&by[id].status[w]==="in")out.push(pname(id));
+    });
+    return out;
   }
   function totals(){
     var t={in:0,paidOut:0,credit:0,owedOut:0,need:0,unpaidCount:0},by=ledger();
@@ -354,6 +373,7 @@ textarea{min-height:130px;resize:vertical;font-size:14px}
          :'<div class="stat"><div class="k">Not in yet</div><div class="v '+(unpaidN?"due":"")+'">'+unpaidN+'</div></div>')
       +'</div>';
 
+    var readd=lk?[]:readmitted(w);
     var missNames=lk?(d.missed||[]).map(pname):[];
     h+='<div class="lockstrip'+(lk?' on':'')+'">'
       +'<div><span class="chip '+(lk?'pend':'flat')+'">'+(lk?'Locked':'Open')+'</span><strong>'+(lk?'Kickoff has passed':'Pay before Thursday kickoff')+'</strong>'
@@ -362,8 +382,15 @@ textarea{min-height:130px;resize:vertical;font-size:14px}
         : 'Lock at kickoff. Anyone not paid up right then is out for week '+w+' — no back paying.')+'</span></div>'
       +(lk?'<button class="btn sm ghost" data-act="unlock" data-v="'+w+'">'+(ui.confirm==="unlock:"+w?"Tap again":"Unlock")+'</button>'
           :'<button class="btn sm '+(unpaidN?'':'pri')+'" data-act="lock" data-v="'+w+'">'
-            +(ui.confirm==="lock:"+w?("Tap again — drops "+unpaidN):"Lock week "+w)+'</button>')
+            +(ui.confirm==="lock:"+w
+               ? (readd.length?("Tap again — lets in "+readd.join(", ")):("Tap again — drops "+unpaidN))
+               : (d.everLocked?"Re-lock week "+w:"Lock week "+w))+'</button>')
       +'</div>';
+    if(!lk&&readd.length){
+      h+='<div class="note">Week '+w+' was locked before. Locking it again puts '+esc(readd.join(", "))
+        +' back in, after paying late — the league rule is that they sat this week out. '
+        +'The pot would go from '+money(d.prevPot||0)+' to '+money(potOf(w))+'.</div>';
+    }
 
     if(lk){
       var elig=(d.playing||[]);
@@ -554,7 +581,10 @@ textarea{min-height:130px;resize:vertical;font-size:14px}
         +'<label class="field"><span class="lab">Name</span><input type="text" id="m-name" value="'+esc(p.name)+'"></label>'
         +'<div class="btnrow"><button class="btn pri" data-act="pay" data-v="'+p.id+'">Log payment</button>'
         +'<button class="btn" data-act="rename" data-v="'+p.id+'">Save name</button>'
-        +'<button class="btn danger" data-act="delperson" data-v="'+p.id+'">'+(ui.confirm==="delperson:"+p.id?"Tap again to remove":"Remove")+'</button></div>';
+        +'<button class="btn danger" data-act="delperson" data-v="'+p.id+'">'
+        +(ui.confirm==="delperson:"+p.id
+           ?("Tap again — also deletes "+state.payments.filter(function(x){return x.pid===p.id;}).length+" payment(s)")
+           :"Remove")+'</button></div>';
     } else if(m.type==="settings"){
       title="League setup";
       body='<label class="field"><span class="lab">League name</span><input type="text" id="m-league" value="'+esc(state.league)+'"></label>'
@@ -572,10 +602,46 @@ textarea{min-height:130px;resize:vertical;font-size:14px}
       +'<div class="pad">'+(ui.err?'<div class="banner" style="margin:0 0 12px">'+esc(ui.err)+'</div>':'')+body+'</div></div></div>';
   }
 
+  function daysSince(iso){
+    if(!iso)return null;
+    var a=String(iso).split("-"),t=Date.parse(a[0]+"-"+a[1]+"-"+a[2]+"T00:00:00");
+    if(isNaN(t))return null;
+    return Math.floor((Date.now()-t)/86400000);
+  }
+  function installed(){
+    try{return (window.matchMedia&&window.matchMedia("(display-mode: standalone)").matches)||navigator.standalone===true;}
+    catch(e){return false;}
+  }
+  function dismissed(k){try{return localStorage.getItem("ppl-x-"+k)==="1";}catch(e){return false;}}
+  function alerts(){
+    if(mode!=="local")return "";
+    var out="";
+    if(saveState==="error"){
+      out+='<div class="banner bad"><strong>This device stopped saving.</strong>'
+        +'Anything you enter now is only on screen — it is not being kept. '
+        +'Export a backup from the Money tab before you close this.</div>';
+    }
+    if(state.payments.length&&!installed()&&!dismissed("install")){
+      out+='<div class="banner"><button data-act="dismiss" data-v="install">Hide</button>'
+        +'<strong>Add this to your Home Screen.</strong>'
+        +'In a plain browser tab, iPhones can clear the ledger after about a week of not opening it. '
+        +'Installed, it keeps the books. Share → Add to Home Screen.</div>';
+    }
+    if(state.payments.length){
+      var d=daysSince(state.lastBackup);
+      if(d===null)
+        out+='<div class="banner"><strong>No backup yet.</strong>'
+          +'The ledger only exists in this browser. Money tab → Export backup, then email it to yourself.</div>';
+      else if(d>=14)
+        out+='<div class="banner"><strong>Last backup was '+d+' days ago.</strong>'
+          +'Money tab → Export backup.</div>';
+    }
+    return out;
+  }
   function paint(){
     var view=ui.tab==="week"?weekView():ui.tab==="people"?peopleView():ui.tab==="money"?moneyView():kickoffView();
     var extra=(ui.tab==="people"||ui.tab==="money")?setupCard():"";
-    root.innerHTML=mast()+tabs()+view+extra
+    root.innerHTML=mast()+alerts()+tabs()+view+extra
       +((mode==="artifact"&&!canWrite)?'<div class="banner">You’re viewing this ledger. Only the commissioner’s changes are saved.</div>':"")
       +modalHtml();
     var q=root.querySelector('input[data-act="q"]');
@@ -588,7 +654,7 @@ textarea{min-height:130px;resize:vertical;font-size:14px}
     var a=el.getAttribute("data-act"),v=el.getAttribute("data-v");
     if(a==="scrim"&&e.target!==el)return;
     ui.focusQ=false;
-    if(["delpay","delperson","unlock","lock","newseason"].indexOf(a)<0)ui.confirm=null;
+    if(["delpay","delperson","unlock","lock","newseason","savesettings"].indexOf(a)<0)ui.confirm=null;
     if(["pay","roster","who","settings","close","scrim","tab"].indexOf(a)>-1)ui.err=null;
     switch(a){
       case "tab": ui.tab=v;ui.q="";saveUi();paint();break;
@@ -602,7 +668,9 @@ textarea{min-height:130px;resize:vertical;font-size:14px}
         ui.confirm=null;lockWeek(+v);touch();paint();break;}
       case "unlock": {
         if(ui.confirm!=="unlock:"+v){ui.confirm="unlock:"+v;paint();break;}
-        ui.confirm=null;var du=wd(+v);du.locked=false;du.playing=null;du.missed=[];du.pot=null;touch();paint();break;}
+        ui.confirm=null;var du=wd(+v);
+        du.prevMissed=(du.missed||[]).slice(); du.prevPot=du.pot;
+        du.locked=false;du.playing=null;du.missed=[];du.pot=null;touch();paint();break;}
       case "inout": {var d=wd(ui.week);var i=d.out.indexOf(v);if(i>-1)d.out.splice(i,1);else d.out.push(v);touch();paint();break;}
       case "payout": wd(ui.week).payout=v;touch();paint();break;
       case "pay": ui.modal={type:"pay",pid:v||"",method:"Venmo"};paint();break;
@@ -619,11 +687,13 @@ textarea{min-height:130px;resize:vertical;font-size:14px}
       case "savepay": savePay();break;
       case "saveroster": saveRoster();break;
       case "savesettings": saveSettings();break;
+      case "dismiss": {try{localStorage.setItem("ppl-x-"+v,"1");}catch(e){}paint();break;}
       case "export": doExport();break;
       case "import": doImport();break;
       case "newseason": {
         if(ui.confirm!=="newseason:"){ui.confirm="newseason:";paint();break;}
-        ui.confirm=null;state.weekData={};state.payments=[];state.currentWeek=1;state.season=state.season+1;
+        ui.confirm=null;doExport();
+        state.weekData={};state.payments=[];state.currentWeek=1;state.season=state.season+1;
         ui.week=1;ui.modal=null;touch();paint();break;}
       case "delpay": {
         if(ui.confirm!=="delpay:"+v){ui.confirm="delpay:"+v;paint();break;}
@@ -637,7 +707,7 @@ textarea{min-height:130px;resize:vertical;font-size:14px}
           if(d2.out)d2.out=d2.out.filter(function(x){return x!==v;});
           if(d2.playing)d2.playing=d2.playing.filter(function(x){return x!==v;});
           if(d2.missed)d2.missed=d2.missed.filter(function(x){return x!==v;});
-          if(d2.playing)d2.pot=d2.playing.length*state.weekPrice;
+          if(d2.playing)d2.pot=d2.playing.length*(d2.price!=null?d2.price:state.weekPrice);
           if(d2.winner===v){d2.winner=null;d2.payout="unpaid";}});
         ui.modal=null;touch();paint();break;}
       case "rename": {
@@ -688,15 +758,32 @@ textarea{min-height:130px;resize:vertical;font-size:14px}
     var sy=parseInt(se.value,10); if(sy>2000)state.season=sy;
     var c=Math.round(parseFloat(pr.value||"5")*100); if(c>0)state.weekPrice=c;
     var tw=parseInt(wk.value,10); if(tw>0)state.totalWeeks=tw;
-    var cw=parseInt(cu.value,10); if(cw>0)state.currentWeek=Math.min(cw,state.totalWeeks);
+    var cw=parseInt(cu.value,10);
+    if(cw>0){
+      cw=Math.min(cw,state.totalWeeks);
+      /* Moving the week forward charges everyone for every week skipped over,
+         straight out of their credit. A typo here quietly drains the pool. */
+      if(cw>state.currentWeek+1){
+        var jump=cw-state.currentWeek;
+        if(ui.confirm!=="jump:"+cw){
+          ui.confirm="jump:"+cw;
+          ui.err="That skips "+jump+" weeks and bills everyone "+money(jump*state.weekPrice)
+            +" of their credit for weeks that were never run. Tap Save again if that's right.";
+          paint();return;
+        }
+        ui.confirm=null;
+      }
+      state.currentWeek=cw;
+    }
     ui.week=Math.min(ui.week,state.totalWeeks);
-    ui.modal=null;touch();paint();
+    ui.err=null;ui.modal=null;touch();paint();
   }
   function doExport(){
     try{
       var blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});
       var url=URL.createObjectURL(blob),a=document.createElement("a");
       a.href=url;a.download="pickem-ledger-"+today()+".json";
+      state.lastBackup=today();
       document.body.appendChild(a);a.click();document.body.removeChild(a);
       setTimeout(function(){URL.revokeObjectURL(url);},2000);
     }catch(e){ui.err="Couldn’t build the backup file.";paint();}
@@ -711,6 +798,7 @@ textarea{min-height:130px;resize:vertical;font-size:14px}
         try{
           var got=JSON.parse(fr.result);
           if(!got||!got.people||!got.weekData)throw 0;
+          if(state.payments.length||state.people.length)doExport();
           state=got;ui.week=state.currentWeek;ui.modal=null;ui.err=null;touch();paint();
         }catch(e){ui.modal={type:"settings"};ui.err="That file isn’t a ledger backup.";paint();}
       };
