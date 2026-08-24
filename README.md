@@ -37,6 +37,18 @@ clears that storage for ordinary Safari tabs after about a week of not visiting
 the site. Installed to the Home Screen, it is exempt. A bookmarked tab left
 alone over a bye week can come back empty.
 
+## The walkthrough
+
+The first time the app is opened on a fresh ledger, an eleven-step walkthrough
+runs once. It covers each part of the app in the order you actually use it, and
+puts a warning on every screen that can quietly cost money or history — the
+kickoff lock and the no-back-paying rule, jumping the season forward, the
+buy-in freezing when a week locks, the three permanent buttons, and how the
+ledger gets lost.
+
+It never launches again after it is finished or skipped. **Money tab → How this
+works** reopens it any time.
+
 ## First-time setup
 
 1. **Add players** — paste the roster, one name per line. Add every person

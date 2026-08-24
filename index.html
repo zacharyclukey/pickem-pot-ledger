@@ -145,6 +145,18 @@ textarea{min-height:130px;resize:vertical;font-size:14px}
 @media(min-width:640px){.scrim{align-items:center;padding:20px}.sheet{border-radius:16px;border-bottom:1px solid var(--rule)}}
 .sheet-hd{position:sticky;top:0;background:var(--card);display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px;border-bottom:1px solid var(--rule2);z-index:2}
 .sheet-hd h2{font-size:16px;font-weight:800}
+.tourkick{font-family:"Chivo";font-size:10px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:var(--brand);margin-bottom:8px}
+.tourbody{font-size:14px;line-height:1.62;color:var(--ink)}
+.tourbody p{margin:0 0 11px}
+.tourbody p:last-child{margin-bottom:0}
+.tourbody b{font-weight:700}
+.tourbody .k{font-family:"IBM Plex Mono";font-size:12.5px;background:var(--card2);border:1px solid var(--rule2);border-radius:5px;padding:1px 5px;white-space:nowrap}
+.warn{background:var(--due-soft);border:1px solid var(--due);border-radius:10px;padding:11px 13px;margin-top:13px;font-size:13px;line-height:1.55;color:var(--due)}
+.warn b{display:block;font-family:"Chivo";font-size:10px;font-weight:800;letter-spacing:.13em;text-transform:uppercase;margin-bottom:4px}
+.dots{display:flex;gap:5px;align-items:center;flex:1}
+.dots i{width:6px;height:6px;border-radius:50%;background:var(--rule);display:block}
+.dots i.on{background:var(--brand);transform:scale(1.35)}
+.dots i.seen{background:var(--faint)}
 .hist{font-size:13px;border-top:1px solid var(--rule2);padding:8px 0;display:flex;justify-content:space-between;gap:8px;align-items:center}
 .banner{background:var(--pend-soft);color:var(--pend);border:1px solid var(--rule);border-radius:10px;padding:9px 12px;font-size:12.5px;margin-top:12px}
 .banner.bad{background:var(--due-soft);color:var(--due)}
@@ -567,6 +579,7 @@ textarea{min-height:130px;resize:vertical;font-size:14px}
 
   function setupCard(){
     return '<div class="card"><div class="card-hd"><h2>League setup</h2>'
+      +'<button class="btn sm ghost" data-act="tour">How this works</button>'
       +'<button class="btn sm ghost" data-act="settings">Edit</button></div>'
       +'<div class="note">'+esc(state.league)+' · '+money(state.weekPrice)+'/week · '+state.totalWeeks+' weeks · on week '+state.currentWeek+'.</div>'
       +(mode==="local"?'<div class="pad btnrow" style="border-top:1px solid var(--rule2)">'
@@ -710,12 +723,100 @@ textarea{min-height:130px;resize:vertical;font-size:14px}
     }
     return out;
   }
+  /* ---------- first-run walkthrough ----------
+     Shown once, on the first launch of a fresh ledger. Every screen that can
+     quietly cost money or history gets its warning here rather than only in
+     the README, because the README is not what gets opened on a phone. */
+  var TOUR_KEY="ppl-tour-v1";
+  function tourSteps(){
+    var P=money(state.weekPrice);
+    return [
+    {kick:"What this is",title:"The pool, in one place",
+     body:"<p>Every week of the season costs <b>"+P+"</b> to enter. Whoever wins the week takes that week\u2019s pot.</p>"
+       +"<p>This replaces the dues checkboxes and the prepay spreadsheet. It tracks three things: <b>who has paid</b>, <b>who is in each week</b>, and <b>how far ahead everyone is</b>.</p>"
+       +"<p>Four tabs across the top: <span class=\"k\">Week</span> for the week in front of you, <span class=\"k\">People</span> for the roster, <span class=\"k\">Money</span> for the books, <span class=\"k\">Kickoff</span> for chasing people down.</p>"},
+
+    {kick:"Step 1",title:"Add everyone one by one",
+     body:"<p><span class=\"k\">Add players</span> takes a whole roster at once \u2014 paste it in, one name per line.</p>"
+       +"<p>Add every person <b>individually</b>, even when a household pays together. One payment can still cover several of them; that comes later.</p>",
+     warn:"<b>Why it matters</b>The pool is scored per player. Entering \u201cthe Smiths\u201d as one name means you cannot tell which of them is in a given week."},
+
+    {kick:"Step 2",title:"Set the buy-in before week 1 locks",
+     body:"<p><span class=\"k\">Money</span> \u2192 <span class=\"k\">Edit</span> sets the league name, season, weekly buy-in and how many weeks you are running.</p>"
+       +"<p>Do this before you lock anything.</p>",
+     warn:"<b>Careful</b>The buy-in is stamped onto a week when that week locks. Changing it later re-prices only the week still open \u2014 settled weeks keep the price they were played at. That is deliberate, so old pots cannot move, but it does mean a mid-season change makes two prices live at once."},
+
+    {kick:"Step 3",title:"Log money as it comes in",
+     body:"<p><span class=\"k\">Log payment</span>, or the <span class=\"k\">+</span> next to a name. Enter the amount, tap the app the money came through, and save.</p>"
+       +"<p>Anything above one week\u2019s buy-in becomes <b>credit</b>. Credit rolls forward and enters that person automatically, week after week, until it runs out. Someone who hands you "+money(state.weekPrice*5)+" is simply in for five weeks and you never chase them again.</p>"},
+
+    {kick:"Step 4",title:"One payment, a whole household",
+     body:"<p>When one person sends money for the whole house, log it once. Set <b>who handed it over</b> and the <b>full lump</b>, then tap every name under <b>who it covers</b>.</p>"
+       +"<p>It splits evenly, odd pennies to the first names, so the shares always add back up. If the household split it unevenly, type the shares yourself.</p>"
+       +"<p>Each share lands in <b>that person\u2019s own credit</b> \u2014 so if one of them sits out a week, only their own credit stops draining.</p>",
+     warn:"<b>Careful</b>Custom shares must add up to the lump handed over, or the save is refused. Deleting a household payment later removes <b>every</b> share in it, not just one."},
+
+    {kick:"Step 5",title:"Thursday: chase the stragglers",
+     body:"<p>The <span class=\"k\">Kickoff</span> tab lists everyone not yet in for this week and what each still owes. The number on the tab is how many.</p>"
+       +"<p><span class=\"k\">Copy</span> puts a ready-made reminder on your clipboard, names and amounts included. Paste it into the league chat.</p>"},
+
+    {kick:"Step 6",title:"At kickoff: lock the week",
+     body:"<p><span class=\"k\">Lock week N</span> closes entry. Everyone paid up is in the pot. Everyone else is <b>out for that week</b> \u2014 never charged for it, never in it, and it goes on their missed list.</p>"
+       +"<p>The button tells you how many people it is about to drop, and asks twice.</p>",
+     warn:"<b>This is the one that bites</b>There is no back paying. Money that arrives after you lock does <b>not</b> buy into the locked week \u2014 it sits as credit for the next one. If you unlock a week and re-lock it, anyone who paid late would slide back in; the app names them on the button first, but read it before tapping."},
+
+    {kick:"Step 7",title:"After the games: settle the pot",
+     body:"<p>Pick the week\u2019s winner from the players who were in, then say what happened to the money:</p>"
+       +"<p><b>Owed</b> \u2014 you still have it and they are due it. <b>Paid out</b> \u2014 it has gone to them. <b>Left in as credit</b> \u2014 it rolls into their account and enters them in coming weeks.</p>"
+       +"<p><span class=\"k\">Kickoff</span> keeps a running list of payouts you still owe, so nothing gets forgotten.</p>"},
+
+    {kick:"Step 8",title:"Then open the next week",
+     body:"<p><span class=\"k\">Open week N+1</span> moves the season on, and locks the previous week first if you forgot. Anyone holding credit is entered automatically.</p>",
+     warn:"<b>Careful</b>Do not jump the season forward by typing into <b>Current week</b> in League setup. Moving from week 1 to week 5 bills every player four weeks of dues out of their credit for weeks that were never run. The app makes you confirm twice and shows the cost \u2014 that is the only warning you get."},
+
+    {kick:"Read this one",title:"How the ledger gets lost",
+     body:"<p>There is no server and no account. The whole ledger lives in <b>this browser, on this phone</b>. That is what makes it work with no signal, and it is also the only real risk.</p>"
+       +"<p>Two things protect it:</p>"
+       +"<p><b>Install it.</b> Share \u2192 Add to Home Screen. iPhones clear storage for ordinary Safari tabs after about a week of not opening the site. Installed, it is exempt.</p>"
+       +"<p><b>Back it up.</b> <span class=\"k\">Money</span> \u2192 <span class=\"k\">Export backup</span> saves a file. Email it to yourself. The app will nag you when a backup is missing or stale.</p>",
+     warn:"<b>Never recoverable</b>Clearing site data, deleting the browser, or a wiped phone takes the ledger with it. A backup file is the only copy that survives any of those."},
+
+    {kick:"Last thing",title:"The three destructive buttons",
+     body:"<p>All three ask twice, and all three are permanent:</p>"
+       +"<p><b>Remove</b> a player also deletes every payment of theirs. The button says how many.</p>"
+       +"<p><b>Start a new season</b> clears every week and payment, keeping only the roster.</p>"
+       +"<p><b>Restore backup</b> replaces everything currently in the app with the file you pick.</p>"
+       +"<p>The last two export a backup of what you have first, automatically, before they run.</p>"}
+    ];
+  }
+  function tourHtml(){
+    if(ui.tour==null)return "";
+    var steps=tourSteps(),i=Math.max(0,Math.min(ui.tour,steps.length-1)),st=steps[i],last=i===steps.length-1;
+    var dots="";for(var j=0;j<steps.length;j++)dots+='<i class="'+(j===i?"on":(j<i?"seen":""))+'"></i>';
+    return '<div class="scrim"><div class="sheet" role="dialog" aria-modal="true" aria-label="How this works">'
+      +'<div class="sheet-hd"><h2>How this works</h2>'
+      +'<button class="btn sm ghost" data-act="tourdone">'+(last?"Close":"Skip")+'</button></div>'
+      +'<div class="pad">'
+        +'<div class="tourkick">'+esc(st.kick)+'</div>'
+        +'<h2 style="font-size:19px;font-weight:800;line-height:1.25;margin-bottom:10px">'+esc(st.title)+'</h2>'
+        +'<div class="tourbody">'+st.body+'</div>'
+        +(st.warn?'<div class="warn">'+st.warn+'</div>':'')
+        +'<div class="btnrow" style="margin-top:18px;align-items:center">'
+          +'<div class="dots">'+dots+'</div>'
+          +(i>0?'<button class="btn sm" data-act="tourback">Back</button>':'')
+          +'<button class="btn sm pri" data-act="'+(last?"tourdone":"tournext")+'">'+(last?"Start using it":"Next")+'</button>'
+        +'</div>'
+      +'</div></div></div>';
+  }
+  function tourSeen(){try{return localStorage.getItem(TOUR_KEY)==="1";}catch(e){return false;}}
+  function markTourSeen(){try{localStorage.setItem(TOUR_KEY,"1");}catch(e){}}
+
   function paint(){
     var view=ui.tab==="week"?weekView():ui.tab==="people"?peopleView():ui.tab==="money"?moneyView():kickoffView();
     var extra=(ui.tab==="people"||ui.tab==="money")?setupCard():"";
     root.innerHTML=mast()+alerts()+tabs()+view+extra
       +((mode==="artifact"&&!canWrite)?'<div class="banner">You’re viewing this ledger. Only the commissioner’s changes are saved.</div>':"")
-      +modalHtml();
+      +(ui.tour!=null?tourHtml():modalHtml());
     var q=root.querySelector('input[data-act="q"]');
     if(q&&ui.focusQ){q.focus();q.setSelectionRange(q.value.length,q.value.length);}
   }
@@ -725,6 +826,7 @@ textarea{min-height:130px;resize:vertical;font-size:14px}
     var el=e.target.closest("[data-act]"); if(!el)return;
     var a=el.getAttribute("data-act"),v=el.getAttribute("data-v");
     if(a==="scrim"&&e.target!==el)return;
+    if(ui.tour!=null&&["tournext","tourback","tourdone"].indexOf(a)<0)return;
     ui.focusQ=false;
     if(["delpay","delperson","unlock","lock","newseason","savesettings"].indexOf(a)<0)ui.confirm=null;
     if(["pay","roster","who","settings","close","scrim","tab"].indexOf(a)>-1)ui.err=null;
@@ -772,6 +874,10 @@ textarea{min-height:130px;resize:vertical;font-size:14px}
       case "savepay": savePay();break;
       case "saveroster": saveRoster();break;
       case "savesettings": saveSettings();break;
+      case "tour": ui.modal=null;ui.tour=0;paint();break;
+      case "tournext": ui.tour=(ui.tour||0)+1;paint();break;
+      case "tourback": ui.tour=Math.max(0,(ui.tour||0)-1);paint();break;
+      case "tourdone": ui.tour=null;markTourSeen();paint();break;
       case "dismiss": {try{localStorage.setItem("ppl-x-"+v,"1");}catch(e){}paint();break;}
       case "export": doExport();break;
       case "import": doImport();break;
@@ -941,6 +1047,7 @@ textarea{min-height:130px;resize:vertical;font-size:14px}
     inp.click();
   }
 
+  if(!tourSeen()&&!state.people.length&&!state.payments.length)ui.tour=0;
   paint();
   if(window.claude&&window.claude.use){
     window.claude.use("artifact").then(function(ns){
