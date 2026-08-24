@@ -1,0 +1,17 @@
+{
+  "name": "Pick'em Pot Ledger",
+  "short_name": "Pot Ledger",
+  "description": "Weekly ledger for a pick'em pool: dues, prepay credit, kickoff lock, and who still owes.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#EAEDE8",
+  "theme_color": "#0E6B4F",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
