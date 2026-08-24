@@ -125,6 +125,9 @@ textarea{min-height:130px;resize:vertical;font-size:14px}
 .seg{display:flex;gap:6px;flex-wrap:wrap}
 .seg button{flex:1 0 auto;padding:8px 10px;border-radius:9px;border:1px solid var(--rule);background:var(--card2);font-size:13px;font-weight:600;cursor:pointer}
 .seg button[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.shrow{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.shrow span{flex:1;font-size:13.5px;font-weight:600}
+.shrow input{width:104px;flex:0 0 auto}
 .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:1px}
 
 .search{margin-top:12px}
@@ -179,6 +182,33 @@ textarea{min-height:130px;resize:vertical;font-size:14px}
   function person(id){for(var i=0;i<state.people.length;i++)if(state.people[i].id===id)return state.people[i];return null;}
   function pname(id){var p=person(id);return p?p.name:"(removed)";}
   function methodColor(m){for(var i=0;i<METHODS.length;i++)if(METHODS[i][0]===m)return METHODS[i][1];return "#8A968F";}
+
+  /* ---------- split payments ----------
+     A household hands over one lump sum covering several players. It is stored
+     as one row per player — the "legs" of the split — sharing a grp id and a
+     payer. Every credit calculation already works per-player, so it keeps
+     working untouched; only entry and display know a split happened. */
+  function splitEven(total,n){
+    var base=Math.floor(total/n),rem=total-base*n,out=[];
+    for(var i=0;i<n;i++)out.push(base+(i<rem?1:0));
+    return out;
+  }
+  function legsOf(grp){
+    return state.payments.filter(function(x){return x.grp&&x.grp===grp;});
+  }
+  /* Payments grouped for display: a split collapses to one entry. */
+  function paymentGroups(){
+    var seen={},out=[];
+    state.payments.forEach(function(x){
+      if(!x.grp){out.push({key:x.id,legs:[x],payer:x.pid,split:false});return;}
+      if(seen[x.grp])return;
+      seen[x.grp]=1;
+      var legs=legsOf(x.grp);
+      out.push({key:x.grp,legs:legs,payer:x.payer||legs[0].pid,split:legs.length>1});
+    });
+    return out;
+  }
+  function groupTotal(g){var n=0;g.legs.forEach(function(x){n+=x.cents;});return n;}
 
   /* ---------- ledger ----------
      Rule: dues are paid BEFORE Thursday kickoff. When a week locks, anyone
@@ -496,15 +526,25 @@ textarea{min-height:130px;resize:vertical;font-size:14px}
       h+=keys.map(function(m){return '<div class="row"><div class="rname"><span class="dot" style="background:'+methodColor(m)+'"></span>'+esc(m)+'</div><span class="num">'+money(byM[m])+'</span></div>';}).join("");
       h+='</div>';
     }
-    h+='<div class="card"><div class="card-hd"><h2>Ledger · '+state.payments.length+' entries</h2>'
+    var groups=paymentGroups().sort(function(a,b){
+      var da=a.legs[0].date,db=b.legs[0].date;return da<db?1:da>db?-1:0;});
+    h+='<div class="card"><div class="card-hd"><h2>Ledger · '+groups.length+' entr'+(groups.length===1?"y":"ies")+'</h2>'
       +'<button class="btn sm pri" data-act="pay" data-v="">Log payment</button></div>';
-    var ps=state.payments.slice().sort(function(a,b){return a.date<b.date?1:a.date>b.date?-1:0;});
-    h+=ps.map(function(x){
-      return '<div class="row"><div class="rname">'+esc(pname(x.pid))
-        +'<span class="rsub"><span class="dot" style="background:'+methodColor(x.method)+'"></span>'+esc(x.method)+' · '+fmtDate(x.date)+(x.note?" · "+esc(x.note):"")+'</span></div>'
-        +'<span class="num" style="font-weight:600">'+money(x.cents)+'</span>'
-        +'<button class="btn icon sm ghost danger" title="Delete" data-act="delpay" data-v="'+x.id+'">'+(ui.confirm==="delpay:"+x.id?"!":"×")+'</button></div>';
+    h+=groups.map(function(g){
+      var x=g.legs[0],tot=groupTotal(g);
+      var head=g.split?esc(pname(g.payer))+' <span style="color:var(--faint);font-weight:600">for '+g.legs.length+'</span>':esc(pname(x.pid));
+      var sub='<span class="dot" style="background:'+methodColor(x.method)+'"></span>'+esc(x.method)+' · '+fmtDate(x.date)+(x.note?" · "+esc(x.note):"");
+      var breakdown=g.split
+        ? '<div class="rsub" style="margin-top:3px">'+g.legs.map(function(l){return esc(pname(l.pid))+' '+money(l.cents);}).join(" · ")+'</div>'
+        : '';
+      return '<div class="row"><div class="rname">'+head+'<span class="rsub">'+sub+'</span>'+breakdown+'</div>'
+        +'<span class="num" style="font-weight:600">'+money(tot)+'</span>'
+        +'<button class="btn icon sm ghost danger" title="Delete" data-act="delpay" data-v="'+g.key+'">'
+        +(ui.confirm==="delpay:"+g.key?(g.split?"!":"!"):"×")+'</button></div>';
     }).join("")||'<div class="empty">No payments logged yet.</div>';
+    h+=(groups.some(function(g){return g.split;})
+      ? '<div class="note">A household payment is one entry here, but each person\u2019s share sits in their own credit — so who\u2019s in each week stays per player.</div>'
+      : '');
     h+='</div>';
     return h;
   }
@@ -530,10 +570,35 @@ textarea{min-height:130px;resize:vertical;font-size:14px}
     if(m.type==="pay"){
       title="Log a payment";
       var opts=state.people.slice().sort(byName).map(function(p){return '<option value="'+p.id+'"'+(m.pid===p.id?" selected":"")+'>'+esc(p.name)+'</option>';}).join("");
-      body='<label class="field"><span class="lab">Who paid</span><select id="m-pid">'+(m.pid?"":'<option value="">— pick —</option>')+opts+'</select></label>'
-        +'<label class="field"><span class="lab">Amount</span><input type="number" id="m-amt" step="0.01" min="0" inputmode="decimal" value="'+esc(m.amt!=null&&m.amt!==""?m.amt:(state.weekPrice/100))+'"></label>'
+      var covers=(m.covers&&m.covers.length)?m.covers:(m.pid?[m.pid]:[]);
+      var total=Math.round(parseFloat(m.amt!=null&&m.amt!==""?m.amt:(state.weekPrice/100))*100)||0;
+      var even=splitEven(total,covers.length||1);
+      var last=(state.lastSplit||[]).filter(function(id){return !!person(id);});
+      var sameAsCovers=last.length===covers.length&&last.every(function(id){return covers.indexOf(id)>-1;});
+
+      body='<label class="field"><span class="lab">Who handed it over</span><select id="m-pid">'+(m.pid?"":'<option value="">— pick —</option>')+opts+'</select></label>'
+        +'<label class="field"><span class="lab">Amount handed over</span><input type="number" id="m-amt" step="0.01" min="0" inputmode="decimal" value="'+esc(m.amt!=null&&m.amt!==""?m.amt:(state.weekPrice/100))+'"></label>'
         +'<div class="field"><span class="lab">Quick</span><div class="seg">'
           +[5,10,20,25,50,85].map(function(v){return '<button type="button" data-act="quick" data-v="'+v+'">$'+v+'</button>';}).join("")+'</div></div>'
+        +'<div class="field"><span class="lab">Who it covers'+(covers.length>1?' · split '+covers.length+' ways':'')+'</span>'
+          +((last.length>1&&!sameAsCovers)?'<div class="seg" style="margin-bottom:6px"><button type="button" data-act="lastsplit">Same household as last time — '+esc(last.map(pname).join(", "))+'</button></div>':'')
+          +'<div class="seg">'
+          +state.people.slice().sort(byName).map(function(pp){
+              return '<button type="button" data-act="cover" data-v="'+pp.id+'" aria-pressed="'+(covers.indexOf(pp.id)>-1)+'">'+esc(pp.name)+'</button>';
+            }).join("")+'</div>'
+          +(covers.length>1
+             ? '<div class="rsub" style="margin-top:6px">Each person\u2019s share lands in their own credit. Edit a share if the household didn\u2019t split it evenly.</div>'
+             : '<div class="rsub" style="margin-top:6px">Tap more names if one payment covers a whole household.</div>')
+        +'</div>'
+        +(covers.length>1
+          ? '<div class="field"><span class="lab">Shares</span>'
+            +covers.map(function(id,i){
+                var v=(m.shares&&m.shares[id]!=null&&m.shares[id]!=="")?m.shares[id]:(even[i]/100).toFixed(2);
+                return '<div class="shrow"><span>'+esc(pname(id))+'</span>'
+                  +'<input type="number" id="m-sh-'+id+'" step="0.01" min="0" inputmode="decimal" value="'+esc(v)+'"></div>';
+              }).join("")
+            +'<div class="rsub" id="m-shsum" style="margin-top:6px">Must add up to the amount handed over.</div></div>'
+          : '')
         +'<div class="field"><span class="lab">Source</span><div class="seg" id="m-method">'
           +METHODS.map(function(x){return '<button type="button" data-act="method" data-v="'+x[0]+'" aria-pressed="'+((m.method||"Venmo")===x[0])+'"><span class="dot" style="background:'+x[1]+'"></span>'+x[0]+'</button>';}).join("")+'</div></div>'
         +'<label class="field"><span class="lab">Date</span><input type="date" id="m-date" value="'+(m.date||today())+'"></label>'
@@ -548,7 +613,14 @@ textarea{min-height:130px;resize:vertical;font-size:14px}
       var b=ledger()[p.id];
       title=p.name;
       var hist=state.payments.filter(function(x){return x.pid===p.id;}).sort(function(a,b2){return a.date<b2.date?1:-1;})
-        .map(function(x){return '<div class="hist"><span><span class="dot" style="background:'+methodColor(x.method)+'"></span>'+esc(x.method)+' · '+fmtDate(x.date)+'</span><span class="num">'+money(x.cents)+'</span></div>';}).join("")
+        .map(function(x){
+          var from="";
+          if(x.grp){
+            var legs=legsOf(x.grp),whole=0;legs.forEach(function(l){whole+=l.cents;});
+            if(legs.length>1)from=' <span style="color:var(--faint)">· share of '+esc(pname(x.payer||p.id))+'\u2019s '+money(whole)+'</span>';
+          }
+          return '<div class="hist"><span><span class="dot" style="background:'+methodColor(x.method)+'"></span>'+esc(x.method)+' · '+fmtDate(x.date)+from+'</span><span class="num">'+money(x.cents)+'</span></div>';
+        }).join("")
         ||'<div class="hist" style="color:var(--faint)">No payments yet</div>';
       var chips="";
       for(var w=1;w<=state.currentWeek;w++){
@@ -662,7 +734,20 @@ textarea{min-height:130px;resize:vertical;font-size:14px}
       case "who": ui.modal={type:"who",pid:v};paint();break;
       case "settings": ui.modal={type:"settings"};paint();break;
       case "close": case "scrim": ui.modal=null;paint();break;
-      case "quick": {var amt=root.querySelector("#m-amt");if(amt)amt.value=v;break;}
+      case "quick": {var amt=root.querySelector("#m-amt");if(amt)amt.value=v;
+        if(ui.modal&&ui.modal.covers&&ui.modal.covers.length>1){syncPay();ui.modal.amt=String(v);ui.modal.shares=null;paint();}
+        break;}
+      case "cover": {
+        syncPay();
+        var cv=coversOf(ui.modal);
+        var at=cv.indexOf(v);
+        if(at>-1){if(cv.length>1)cv.splice(at,1);}else cv.push(v);
+        ui.modal.covers=cv; ui.modal.shares=null;   /* re-even the split */
+        paint();break;}
+      case "lastsplit": {
+        syncPay();
+        ui.modal.covers=(state.lastSplit||[]).filter(function(id){return !!person(id);});
+        ui.modal.shares=null;paint();break;}
       case "method": {
         ui.modal.method=v;
         var btns=root.querySelectorAll('#m-method [data-act="method"]');
@@ -681,7 +766,13 @@ textarea{min-height:130px;resize:vertical;font-size:14px}
         ui.week=1;ui.modal=null;touch();paint();break;}
       case "delpay": {
         if(ui.confirm!=="delpay:"+v){ui.confirm="delpay:"+v;paint();break;}
-        ui.confirm=null;state.payments=state.payments.filter(function(x){return x.id!==v;});touch();paint();break;}
+        ui.confirm=null;
+        var tgt=null;
+        state.payments.forEach(function(x){if(x.id===v||x.grp===v)tgt=x.grp||null;});
+        state.payments=tgt
+          ? state.payments.filter(function(x){return x.grp!==tgt;})
+          : state.payments.filter(function(x){return x.id!==v;});
+        touch();paint();break;}
       case "delperson": {
         if(ui.confirm!=="delperson:"+v){ui.confirm="delperson:"+v;paint();break;}
         ui.confirm=null;
@@ -718,15 +809,58 @@ textarea{min-height:130px;resize:vertical;font-size:14px}
   });
   window.addEventListener("beforeunload",function(){if(dirty&&mode==="artifact"){clearTimeout(timer);flush();}});
 
+  function syncPay(){
+    var m=ui.modal; if(!m||m.type!=="pay")return;
+    var g=function(id){var e=root.querySelector("#"+id);return e?e.value:null;},v;
+    if((v=g("m-pid"))!=null)m.pid=v;
+    if((v=g("m-amt"))!=null)m.amt=v;
+    if((v=g("m-date"))!=null)m.date=v;
+    if((v=g("m-note"))!=null)m.note=v;
+    if(m.covers&&m.covers.length>1){
+      m.shares=m.shares||{};
+      m.covers.forEach(function(id){var e=root.querySelector("#m-sh-"+id);if(e)m.shares[id]=e.value;});
+    }
+  }
+  function coversOf(m){
+    var c=(m.covers&&m.covers.length)?m.covers.slice():(m.pid?[m.pid]:[]);
+    return c.filter(function(id){return !!person(id);});
+  }
   function savePay(){
-    var pid=root.querySelector("#m-pid"),amt=root.querySelector("#m-amt"),dt=root.querySelector("#m-date"),nt=root.querySelector("#m-note");
-    ui.modal.pid=pid?pid.value:"";ui.modal.amt=amt?amt.value:"";ui.modal.date=dt?dt.value:"";ui.modal.note=nt?nt.value:"";
-    if(!pid||!pid.value){ui.err="Pick who paid.";paint();return;}
-    var cents=Math.round(parseFloat(amt.value||"0")*100);
+    syncPay();
+    var m=ui.modal;
+    if(!m.pid){ui.err="Pick who handed the money over.";paint();return;}
+    var cents=Math.round(parseFloat(m.amt||"0")*100);
     if(!(cents>0)){ui.err="Enter an amount greater than zero.";paint();return;}
-    ui.err=null;
-    state.payments.push({id:uid(),pid:pid.value,cents:cents,method:ui.modal.method||"Venmo",date:dt.value||today(),note:(nt.value||"").trim()});
-    ui.modal=null;touch();paint();
+
+    var covers=coversOf(m);
+    if(!covers.length)covers=[m.pid];
+    var method=m.method||"Venmo",date=m.date||today(),note=(m.note||"").trim();
+
+    if(covers.length===1){
+      state.payments.push({id:uid(),pid:covers[0],cents:cents,method:method,date:date,note:note});
+    }else{
+      /* Shares default to an even split, remainder pennies to the first names,
+         so the legs always add back up to the amount actually handed over. */
+      var even=splitEven(cents,covers.length),shares=[],sum=0,custom=false;
+      covers.forEach(function(id,i){
+        var raw=m.shares&&m.shares[id];
+        var c=(raw==null||raw==="")?even[i]:Math.round(parseFloat(raw)*100);
+        if(isNaN(c)||c<0)c=0;
+        if(c!==even[i])custom=true;
+        shares.push(c);sum+=c;
+      });
+      if(custom&&sum!==cents){
+        ui.err="The shares add up to "+money(sum)+", but "+money(cents)+" was handed over — off by "+money(Math.abs(cents-sum))+".";
+        paint();return;
+      }
+      if(!custom)shares=even;
+      var grp="g"+uid();
+      covers.forEach(function(id,i){
+        state.payments.push({id:uid(),pid:id,cents:shares[i],method:method,date:date,note:note,grp:grp,payer:m.pid});
+      });
+      state.lastSplit=covers.slice();
+    }
+    ui.err=null;ui.modal=null;touch();paint();
   }
   function saveRoster(){
     var ta=root.querySelector("#m-roster");if(!ta)return;

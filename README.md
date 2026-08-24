@@ -39,9 +39,33 @@ alone over a bye week can come back empty.
 
 ## First-time setup
 
-1. **Add players** — paste the roster, one name per line.
+1. **Add players** — paste the roster, one name per line. Add every person
+   individually, even if their household pays as one — the pool is per player.
 2. **League setup** (Money tab → Edit) — league name, season, buy-in, weeks.
 3. Log payments as they come in, tagged by source.
+
+## When a household pays as a block
+
+One person often Venmos for the whole house. Log it once:
+
+1. **Log payment** → *Who handed it over* is the person who actually sent the money.
+2. *Amount handed over* is the full lump — $75, not $25.
+3. Under **Who it covers**, tap every name the payment is for.
+4. Save.
+
+It splits evenly by default, with any odd pennies going to the first names, so
+the shares always add back up to the lump. If the household didn't split it
+evenly, edit the per-person **Shares** — the save is refused if they don't
+reconcile, and the error says how far off you are.
+
+The next time you log a household payment, a **Same household as last time**
+button re-ticks those names in one tap.
+
+Each person's share lands in **their own** credit. That matters: the pool still
+tracks who's in and who's out one player at a time, so if one member of a
+household sits out a week, only their own credit stops draining. The Money tab
+shows the payment as a single entry with the breakdown underneath; deleting it
+removes every share at once.
 
 ## Each week
 
